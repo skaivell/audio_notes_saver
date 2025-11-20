@@ -41,16 +41,21 @@ async def edit_note(
     note_id: Annotated[int, Path(..., title="Здесь указывается id заметки", ge= 1)],
     note_update: Annotated[NotePutSchema, Depends()],  
     session: SessionDep,
-    current_user_id: str = Depends(get_current_user_id)) -> NoteModel:
+    #current_user_id: str = Depends(get_current_user_id)
+    ) -> NoteModel:
     
     check = await session.execute(
-        select(NoteModel).where(NoteModel.id == note_id, NoteModel.user_id == current_user_id)
-    )
+        select(NoteModel).where(NoteModel.id == note_id))#, NoteModel.user_id == current_user_id))
+    
     note = check.scalar_one_or_none()
     if not note:
         raise HTTPException(status_code=404, detail="Заметка не найдена или нет доступа")
     
     update_data = note_update.model_dump(exclude_unset=True)
+    if not update_data:
+        return note
+    
+    update_data = {k: v for k, v in update_data.items() if v is not None}
     if not update_data:
         return note
     
@@ -62,9 +67,10 @@ async def edit_note(
         .execution_options(synchronize_session="fetch")
         )
     
-    result = await session.execute(query)
+    await session.execute(query)
     await session.commit()
     
+    result = await session.execute(select(NoteModel).where(NoteModel.id == note_id))
     updated_note = result.scalar_one()
     return updated_note
 
